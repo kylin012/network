@@ -312,20 +312,32 @@ int main(){
         int recv_num = 0;
         // 表示是否已接收到文件名
         bool is_name = 0;
+        int timeout=100;
+        setsockopt(server, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
         // 此循环确保接收信息的正确性
         while(1){
-            recvfrom(server, recv_buf, sizeof(group), 0, (sockaddr*)&caddr, &addr_len);
+            int res = recvfrom(server, recv_buf, sizeof(group), 0, (sockaddr*)&caddr, &addr_len);
             char_to_group(recv_buf,rg);
-            getlog(rg,1);
-            // 如果接收到乱序报文或校验和错误，则发送ACK报文的序号不变
-            if(rg.seq!=id||!ver_checksum(&rg)){
-                cout<<"信息出错！"<<endl;
+            if(res<0){
+                //cout<<"超时"<<endl;
                 group sg = ACK_UDP();
 				group_to_char(sg, send_buf);
                 sendto(server, send_buf, sizeof(group), 0, (sockaddr*)&caddr, addr_len);
-                getlog(sg,0);
+                recv_num=0;
+                //getlog(sg,0);
                 continue;
             }
+            // 如果接收到乱序报文或校验和错误，则发送ACK报文的序号不变
+            if(rg.seq!=id||!ver_checksum(&rg)){
+                cout<<"信息出错"<<endl;
+                group sg = ACK_UDP();
+				group_to_char(sg, send_buf);
+                sendto(server, send_buf, sizeof(group), 0, (sockaddr*)&caddr, addr_len);
+                recv_num=0;
+                //getlog(sg,0);
+                continue;
+            }
+            getlog(rg,1);
             id++;
             recv_num++;
             // 如果接收到顺序报文，且校验和正确，则对接收的信息进行处理并进行累积，直到累积的大小等于窗口大小
